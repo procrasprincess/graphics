@@ -1,0 +1,186 @@
+<script src=lib1.js></script>
+
+<body bgcolor=black text=white link=white alink=white vlink=white>
+<center>
+<canvas id='canvas1' width=600 height=600></canvas>
+</center>
+</body>
+
+
+<!!-------- VERTEX SHADER-------->
+
+<script id='my_vertex_shader' type='x-shader/x-vertex'>
+   attribute vec3 aPos;
+   varying   vec3 vPos;
+   void main() {
+      gl_Position = vec4(aPos, 1.);
+      vPos = aPos;
+   }
+</script>
+
+
+<!!-------- FRAGMENT SHADER-------->
+
+<script id='my_fragment_shader' type='x-shader/x-fragment'>
+
+ uniform float uTime;   // TIME, IN SECONDS
+
+ varying vec3 vPos;     // -1 < vPos.x < +1
+                        // -1 < vPos.y < +1
+                        //      vPos.z == 0
+
+ void main() {
+
+    // LIGHT DIRECTION AND COLOR
+
+    vec3 LDir = vec3(.5,.5,.5);
+    vec3 LCol = vec3(0.5 + 0.5 * vPos);
+    //vec3 LCol = vec3(1.,.5,.5);
+
+    //float R = 0.4;
+    float R = - 0.4*sin(uTime);
+    // vPos IS THE 3D LOCATION OF THIS FRAGMENT.
+
+    // SURFACE REFLECTANCE PROPERTIES
+
+    vec3 diffuse = vec3(.7,.7,1.);
+    vec3 ambient = vec3(.03,.03,.1);
+
+    // CREATE A WACKY BACKGROUND PATTERN.
+    vec3 color = sin(uTime)*(2.0 - 1.5 * vPos);//(Black: - to +)
+
+    color *= (sin(1.0*uTime)/cos(1.0*uTime))*sin(2.0*uTime);
+
+    float x = vPos.x;
+    float y = vPos.y;
+
+    // CREATE BOUNCING ANIMATION.
+    x += atan(0.15 * sin(3. * x));
+    y += tan(uTime)*(0.2 * cos(3. * y));
+
+    // FIGURE OUT WHETHER THIS PIXEL IS ON THE SPHERE.
+     float rr = x * x + y * y;
+
+    // IF SO, THEN SHADE THE SPHERE.
+    if (rr < R*R) {
+
+       // COMPUTE THE z AND NORMAL OF THE SPHERE.
+
+       float z = R*sqrt(2.0 - rr/(R*R));
+       vec3 N = vec3(x,y,z) / R;
+
+       color = vec3(0.1,0.1,0.1);
+       float dp =  dot(N, LDir);
+       if (dp>0.)
+        color += dp * LCol;
+
+       // APPLY SHADING AND LIGHTING.
+        color = ambient;
+        color += diffuse * max(0.2, dot(N, LCol)) * LDir;
+
+       // ROTATE THE TEXTURE OVER TIME.
+
+       float angle = sin(uTime)*sin(uTime);
+       float px =  cos(angle) * N.x + tan(angle) * N.z;
+       float pz = -atan(angle) * N.x + cos(angle) * N.z;
+       vec3 P = vec3(px, N.y, pz);
+
+       // APPLY PROCEDURAL NOISE TEXTURE.
+
+       float texture = .2 + .3 * noise(4. * P);
+       color *= texture;
+    }
+    // APPLY GAMMA CORRECTION AND SET THE PIXEL COLOR.
+
+      gl_FragColor = vec4(sqrt(color), 1.0);
+ }
+</script>
+
+
+<!!-------TITLE-------->
+
+<script id='my_title' type='text/html'>
+  <h3>========== Life of a Dragon Egg ===========</h3>
+</script>
+
+
+<!!--------TEXT-------->
+
+<script id='my_instructions' type='text/html'><font color=#b0b0b0>
+<b>Short Description</b><br>
+<blockquote>
+<i>This is Sarah's first attempt wokring with fragment shader.</i>
+</blockquote>
+
+<b>Here is what I made:</b></br>
+<blockquote>
+<i>
+I created a stimulation of a dragon egg's life. <br>
+Going through birth and death/darkness, <br>
+and in between the egg lives a colorful life.<br>
+</i>
+</blockquote>
+
+<!-- make a "back" button for convenience -->
+<input type="button" onclick="location.href='https://cims.nyu.edu/~xl781/graphics.html';" value="Return to Sarah Lin's NYU Website"/>
+
+</script>
+
+
+<!!------Other-------->
+
+<script>
+
+// CREATE THE HTML DOCUMENT
+
+let vs = my_vertex_shader.innerHTML,
+    fs = my_fragment_shader.innerHTML;
+    fs = fs.substring(1, fs.length);
+
+document.body.innerHTML = [''
+   ,'<center><font size=6 color=#b0b0b0>' + my_title.innerHTML + '</center>'
+   ,'<TABLE cellspacing=0 cellpadding=0><TR>'
+   ,'<td width=50></td><td><font color=red size=5><div id=errorMessage>&nbsp;</div></font></td>'
+   ,'</TR><TR>'
+   ,'<table cellspacing=10>'
+   ,'<tr>'
+   ,'<td valign=top><font size=2 color=red><div id=errorMarker>&nbsp;</div></font></td>'
+   ,'<td valign=top>'
+   ,'<textArea id=textArea spellcheck=false '
+   ,'style="font:16px courier;outline-width:0;border-style:none;resize:none;overflow:scroll;"'
+   ,'></textArea>'
+   ,'</td><td valign=top>' + document.body.innerHTML + '</td>'
+   ,'<td valign=top><font size=5>' + my_instructions.innerHTML + '</td>'
+   ,'</tr></table>'
+   ,'</TR></TABLE>'
+   ].join('');
+
+// SET UP THE EDITABLE TEXT AREA ON THE LEFT SIDE.
+
+let text = fs.split('\n'), cols = 0;
+for (let i = 0 ; i < text.length ; i++)
+   cols = Math.max(cols, text[i].length);
+
+textArea.rows = text.length;
+textArea.cols = cols;
+textArea.value = fs;
+textArea.style.backgroundColor = '#202020';
+textArea.style.color = 'white';
+
+// REPARSE THE SHADER PROGRAM AFTER EVERY KEYSTROKE.
+
+textArea.onkeyup = function() { canvas1.setShaders(vs, this.value); }
+
+// SET THE CURRENT TIME IN SECONDS BEFORE RENDERING EACH FRAME.
+
+let startTime = Date.now();
+
+function animate(gl) {
+   let time = (Date.now() - startTime) / 1000;
+   setUniform('1f', 'uTime', time);
+}
+
+// START EVERYTHING.
+
+gl_start(canvas1, vs, fs);
+</script>
